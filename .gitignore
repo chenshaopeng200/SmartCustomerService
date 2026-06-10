@@ -1,0 +1,31 @@
+# .NET
+bin/
+obj/
+*.user
+*.suo
+*.userosscache
+*.sln.docstats
+*.userprefs
+*.userosscache
+*.publishsettings
+node_modules/
+
+# VS Code
+.vs/
+.vscode/
+
+# Rider
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+appsettings.*.local.json
+
+# Frontend
+frontend/dist/
+frontend/node_modules/
