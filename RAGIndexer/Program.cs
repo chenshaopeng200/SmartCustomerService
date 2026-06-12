@@ -15,7 +15,9 @@ var config = new ConfigurationBuilder()
 
 var cliproxyBaseUrl = config["CliproxyApi:BaseUrl"]!;
 var cliproxyApiKey = config["CliproxyApi:ApiKey"]!;
-var embeddingModel = config["CliproxyApi:EmbeddingModel"]!;
+var embeddingModel = config["EmbeddingApi:Model"] ?? config["CliproxyApi:EmbeddingModel"]!;
+var embeddingBaseUrl = config["EmbeddingApi:BaseUrl"]!;
+var embeddingApiKey = config["EmbeddingApi:ApiKey"]!;
 var qdrantHost = config["Qdrant:Host"]!;
 var qdrantPort = int.Parse(config["Qdrant:Port"]!);
 var collectionName = config["Qdrant:CollectionName"]!;
@@ -33,6 +35,9 @@ if (args.Length == 0)
 using var httpClient = new HttpClient { BaseAddress = new Uri(cliproxyBaseUrl) };
 httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {cliproxyApiKey}");
 
+using var embeddingHttpClient = new HttpClient { BaseAddress = new Uri(embeddingBaseUrl) };
+embeddingHttpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {embeddingApiKey}");
+
 using var qdrantClient = new QdrantClient(qdrantHost, qdrantPort);
 
 var collections = await qdrantClient.ListCollectionsAsync();
@@ -48,7 +53,7 @@ if (args[0] == "--watch" && args.Length > 1)
 {
     var watchDir = args[1];
     Console.WriteLine($"Watching directory: {watchDir}");
-    await IndexDirectoryAsync(qdrantClient, httpClient, watchDir, collectionName, embeddingModel, maxChunkSize, overlap);
+    await IndexDirectoryAsync(qdrantClient, httpClient, embeddingHttpClient, watchDir, collectionName, embeddingModel, maxChunkSize, overlap);
 
     using var watcher = new FileSystemWatcher(watchDir)
     {
@@ -61,7 +66,7 @@ if (args[0] == "--watch" && args.Length > 1)
     {
         await Task.Delay(1000);
         Console.WriteLine($"New file: {e.FullPath}");
-        await IndexFileAsync(qdrantClient, httpClient, e.FullPath, collectionName, embeddingModel, maxChunkSize, overlap);
+        await IndexFileAsync(qdrantClient, httpClient, embeddingHttpClient, e.FullPath, collectionName, embeddingModel, maxChunkSize, overlap);
     };
 
     watcher.Changed += async (s, e) =>
@@ -69,7 +74,7 @@ if (args[0] == "--watch" && args.Length > 1)
         await Task.Delay(2000);
         Console.WriteLine($"Changed: {e.FullPath}");
         await DeleteBySourceAsync(qdrantClient, collectionName, e.FullPath);
-        await IndexFileAsync(qdrantClient, httpClient, e.FullPath, collectionName, embeddingModel, maxChunkSize, overlap);
+        await IndexFileAsync(qdrantClient, httpClient, embeddingHttpClient, e.FullPath, collectionName, embeddingModel, maxChunkSize, overlap);
     };
 
     watcher.Deleted += (s, e) =>
@@ -87,7 +92,7 @@ else
     {
         if (Directory.Exists(filePath))
         {
-            await IndexDirectoryAsync(qdrantClient, httpClient, filePath, collectionName, embeddingModel, maxChunkSize, overlap);
+            await IndexDirectoryAsync(qdrantClient, httpClient, embeddingHttpClient, filePath, collectionName, embeddingModel, maxChunkSize, overlap);
             continue;
         }
 
@@ -97,12 +102,12 @@ else
             continue;
         }
 
-        await IndexFileAsync(qdrantClient, httpClient, filePath, collectionName, embeddingModel, maxChunkSize, overlap);
+        await IndexFileAsync(qdrantClient, httpClient, embeddingHttpClient, filePath, collectionName, embeddingModel, maxChunkSize, overlap);
     }
     Console.WriteLine("Done.");
 }
 
-static async Task IndexDirectoryAsync(QdrantClient qdrantClient, HttpClient httpClient,
+static async Task IndexDirectoryAsync(QdrantClient qdrantClient, HttpClient httpClient, HttpClient embeddingHttpClient,
     string dir, string collectionName, string embeddingModel, int maxChunkSize, int overlap)
 {
     var files = Directory.GetFiles(dir, "*.*", SearchOption.AllDirectories)
@@ -110,10 +115,10 @@ static async Task IndexDirectoryAsync(QdrantClient qdrantClient, HttpClient http
         .ToList();
 
     foreach (var file in files)
-        await IndexFileAsync(qdrantClient, httpClient, file, collectionName, embeddingModel, maxChunkSize, overlap);
+        await IndexFileAsync(qdrantClient, httpClient, embeddingHttpClient, file, collectionName, embeddingModel, maxChunkSize, overlap);
 }
 
-static async Task IndexFileAsync(QdrantClient qdrantClient, HttpClient httpClient,
+static async Task IndexFileAsync(QdrantClient qdrantClient, HttpClient httpClient, HttpClient embeddingHttpClient,
     string filePath, string collectionName, string embeddingModel, int maxChunkSize, int overlap)
 {
     if (!File.Exists(filePath)) return;
@@ -133,7 +138,7 @@ static async Task IndexFileAsync(QdrantClient qdrantClient, HttpClient httpClien
 
     for (int i = 0; i < chunks.Length; i++)
     {
-        var embedding = await GetEmbedding(httpClient, embeddingModel, chunks[i]);
+        var embedding = await GetEmbedding(embeddingHttpClient, embeddingModel, chunks[i]);
         var point = new PointStruct
         {
             Id = maxId + (ulong)i + 1,

@@ -7,6 +7,7 @@ namespace CliproxyApi.Services;
 public class LLMService
 {
     private readonly HttpClient _httpClient;
+    private readonly HttpClient _embeddingHttpClient;
     private readonly string _chatModel;
     private readonly string _embeddingModel;
     private readonly ILogger<LLMService> _logger;
@@ -21,10 +22,15 @@ public class LLMService
         var baseUrl = config["CliproxyApi:BaseUrl"]!;
         var apiKey = config["CliproxyApi:ApiKey"]!;
         _chatModel = config["CliproxyApi:ChatModel"]!;
-        _embeddingModel = config["CliproxyApi:EmbeddingModel"]!;
+        _embeddingModel = config["EmbeddingApi:Model"] ?? config["CliproxyApi:EmbeddingModel"]!;
 
         _httpClient = new HttpClient { BaseAddress = new Uri(baseUrl) };
         _httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {apiKey}");
+
+        var embeddingBaseUrl = config["EmbeddingApi:BaseUrl"]!;
+        var embeddingApiKey = config["EmbeddingApi:ApiKey"]!;
+        _embeddingHttpClient = new HttpClient { BaseAddress = new Uri(embeddingBaseUrl) };
+        _embeddingHttpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {embeddingApiKey}");
     }
 
     public async Task<float[]> GetEmbedding(string text)
@@ -32,7 +38,7 @@ public class LLMService
         PrometheusMetrics.LlmCallsTotal.WithLabels("embedding").Inc();
         var request = new EmbeddingRequest { Model = _embeddingModel, Input = text };
         var content = new StringContent(JsonSerializer.Serialize(request, _jsonOptions), Encoding.UTF8, "application/json");
-        var response = await _httpClient.PostAsync("/v1/embeddings", content);
+        var response = await _embeddingHttpClient.PostAsync("/v1/embeddings", content);
         response.EnsureSuccessStatusCode();
         var result = await response.Content.ReadFromJsonAsync<EmbeddingResponse>(_jsonOptions);
         return result!.Data[0].Embedding.ToArray();

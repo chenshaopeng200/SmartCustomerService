@@ -38,36 +38,53 @@ export default {
   name: 'App',
   components: { ChatWindow, ChatInput, EvalPanel, LoginForm },
   data() {
+    let username = ''
+    let token = ''
+    try {
+      username = localStorage.getItem('username') || ''
+      token = localStorage.getItem('token') || ''
+    } catch (e) {
+      // localStorage not available
+    }
     return {
       messages: [],
       streaming: false,
-      username: localStorage.getItem('username') || '',
-      token: localStorage.getItem('token') || '',
+      username,
+      token,
       showEval: false,
-      showLogin: false
+      showLogin: false,
+      debug: 'ready'
     }
+  },
+  mounted() {
+    console.log('App mounted, messages:', this.messages.length)
   },
   methods: {
     onLogin({ username, token }) {
       this.username = username
       this.token = token
-      localStorage.setItem('username', username)
-      localStorage.setItem('token', token)
+      try {
+        localStorage.setItem('username', username)
+        localStorage.setItem('token', token)
+      } catch (e) {}
       this.showLogin = false
     },
     logout() {
       this.username = ''
       this.token = ''
-      localStorage.removeItem('username')
-      localStorage.removeItem('token')
+      try {
+        localStorage.removeItem('username')
+        localStorage.removeItem('token')
+      } catch (e) {}
       this.messages = []
     },
     async onSend(message) {
-      this.messages.push({ role: 'user', content: message, citations: [] })
-      this.streaming = true
-
+      const userMsg = { role: 'user', content: message, citations: [] }
       const assistantMsg = { role: 'assistant', content: '', citations: [] }
+      this.messages.push(userMsg)
       this.messages.push(assistantMsg)
+      this.streaming = true
+      this.debug = 'sending'
 
       try {
         const headers = { 'Content-Type': 'application/json' }
@@ -88,6 +105,7 @@ export default {
         const reader = response.body.getReader()
         const decoder = new TextDecoder()
         let buffer = ''
+        let idx = this.messages.length - 1
 
         while (true) {
           const { done, value } = await reader.read()
@@ -101,21 +119,26 @@ export default {
             const data = line.slice(6)
             if (data === '[DONE]') continue
             if (data.startsWith('[ERROR]')) {
-              assistantMsg.content = data.replace('[ERROR] ', '')
+              this.messages[idx].content = data.replace('[ERROR] ', '')
               continue
             }
-            assistantMsg.content += data
+            this.messages[idx].content += data
           }
         }
 
-        this.highlightCitations(assistantMsg)
+        this.debug = 'done'
+        this.highlightCitations(idx)
       } catch (err) {
-        assistantMsg.content = '连接失败：' + err.message
+        const lastIdx = this.messages.length - 1
+        this.messages[lastIdx].content = '连接失败：' + err.message
+        this.debug = 'error: ' + err.message
       } finally {
         this.streaming = false
       }
     },
-    highlightCitations(msg) {
+    highlightCitations(idx) {
+      const msg = this.messages[idx]
+      if (!msg) return
       const matches = msg.content.match(/\[\d+\]/g)
       if (matches) msg.citations = [...new Set(matches)]
     }
