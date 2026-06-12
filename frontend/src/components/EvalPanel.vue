@@ -72,9 +72,16 @@ export default {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ query: this.evalQuery, userId: this.username || 'anonymous' })
         })
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
         this.evalResult = await res.json()
       } catch (err) {
-        this.evalResult = { details: '评估失败: ' + err.message, overallScore: 0 }
+        this.evalResult = {
+          faithfulness: 0,
+          relevance: 0,
+          retrievalPrecision: 0,
+          overallScore: 0,
+          details: '评估失败: ' + err.message
+        }
       } finally {
         this.evalLoading = false
       }
@@ -89,9 +96,16 @@ export default {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ query: this.compareQuery })
         })
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
         this.compareResult = await res.json()
       } catch (err) {
-        this.compareResult = { analysis: '对比失败: ' + err.message }
+        this.compareResult = {
+          query: this.compareQuery,
+          winner: '评估失败',
+          analysis: '对比失败: ' + err.message,
+          sideA: { label: 'A', config: {}, answer: '', sources: [], scores: { faithfulness: 0, relevance: 0, retrievalPrecision: 0, overallScore: 0 } },
+          sideB: { label: 'B', config: {}, answer: '', sources: [], scores: { faithfulness: 0, relevance: 0, retrievalPrecision: 0, overallScore: 0 } }
+        }
       } finally {
         this.compareLoading = false
       }
