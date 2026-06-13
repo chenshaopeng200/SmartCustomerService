@@ -49,7 +49,7 @@ public class QdrantService
     {
         try
         {
-            var queryVector = await _llmService.GetEmbedding(query);
+            var queryVector = await _llmService.GetEmbedding(query, "query");
             var searchResult = await _client.SearchAsync(_collectionName, queryVector.ToArray(), limit: (ulong)topK);
 
             return searchResult.Select(r => new QdrantSearchResult

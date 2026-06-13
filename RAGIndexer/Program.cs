@@ -35,7 +35,7 @@ if (args.Length == 0)
 using var httpClient = new HttpClient { BaseAddress = new Uri(cliproxyBaseUrl) };
 httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {cliproxyApiKey}");
 
-using var embeddingHttpClient = new HttpClient { BaseAddress = new Uri(embeddingBaseUrl) };
+using var embeddingHttpClient = new HttpClient { BaseAddress = new Uri(embeddingBaseUrl), Timeout = TimeSpan.FromSeconds(30) };
 embeddingHttpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {embeddingApiKey}");
 
 using var qdrantClient = new QdrantClient(qdrantHost, qdrantPort);
@@ -124,7 +124,8 @@ static async Task IndexFileAsync(QdrantClient qdrantClient, HttpClient httpClien
     if (!File.Exists(filePath)) return;
 
     Console.WriteLine($"Processing: {filePath}");
-    var text = ExtractText(filePath);
+    var fullPath = Path.GetFullPath(filePath);
+    var text = ExtractText(fullPath);
     if (string.IsNullOrWhiteSpace(text))
     {
         Console.WriteLine($"  No text extracted from {filePath}, skipping.");
@@ -138,7 +139,9 @@ static async Task IndexFileAsync(QdrantClient qdrantClient, HttpClient httpClien
 
     for (int i = 0; i < chunks.Length; i++)
     {
+        Console.WriteLine($"  Chunk {i + 1}/{chunks.Length}: embedding...");
         var embedding = await GetEmbedding(embeddingHttpClient, embeddingModel, chunks[i]);
+        Console.WriteLine($"  Chunk {i + 1}/{chunks.Length}: got {embedding.Length}-dim vector");
         var point = new PointStruct
         {
             Id = maxId + (ulong)i + 1,
@@ -182,7 +185,9 @@ static async Task<ulong> GetMaxPointIdAsync(QdrantClient qdrantClient, string co
 {
     try
     {
-        var response = await qdrantClient.ScrollAsync(collection, limit: 1, orderBy: new OrderBy { Key = "id" });
+        var countResponse = await qdrantClient.CountAsync(collection);
+        if (countResponse == 0) return 0;
+        var response = await qdrantClient.ScrollAsync(collection, limit: 1, offset: (ulong)(countResponse - 1));
         return response.Result.Count > 0 ? response.Result[0].Id.Num : 0;
     }
     catch
@@ -260,6 +265,7 @@ static string[] SplitTextIntoChunks(string text, int maxChunkSize, int overlap)
         var chunk = text[start..end].Trim();
         if (!string.IsNullOrWhiteSpace(chunk))
             chunks.Add(chunk);
+        if (end >= text.Length) break;
         start = end - overlap;
         if (start < 0) start = 0;
     }
@@ -268,9 +274,9 @@ static string[] SplitTextIntoChunks(string text, int maxChunkSize, int overlap)
 
 static async Task<float[]> GetEmbedding(HttpClient client, string model, string text)
 {
-    var requestBody = new { model, input = text };
+    var requestBody = new { model, input = text, input_type = "passage" };
     var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
-    var response = await client.PostAsync("/v1/embeddings", content);
+    var response = await client.PostAsync("embeddings", content);
     response.EnsureSuccessStatusCode();
     var json = await response.Content.ReadFromJsonAsync<JsonElement>();
     return json.GetProperty("data")[0].GetProperty("embedding").EnumerateArray()

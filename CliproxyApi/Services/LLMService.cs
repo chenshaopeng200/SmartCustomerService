@@ -33,12 +33,12 @@ public class LLMService
         _embeddingHttpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {embeddingApiKey}");
     }
 
-    public async Task<float[]> GetEmbedding(string text)
+    public async Task<float[]> GetEmbedding(string text, string inputType = "passage")
     {
         PrometheusMetrics.LlmCallsTotal.WithLabels("embedding").Inc();
-        var request = new EmbeddingRequest { Model = _embeddingModel, Input = text };
+        var request = new EmbeddingRequest { Model = _embeddingModel, Input = text, InputType = inputType };
         var content = new StringContent(JsonSerializer.Serialize(request, _jsonOptions), Encoding.UTF8, "application/json");
-        var response = await _embeddingHttpClient.PostAsync("/v1/embeddings", content);
+        var response = await _embeddingHttpClient.PostAsync("embeddings", content);
         response.EnsureSuccessStatusCode();
         var result = await response.Content.ReadFromJsonAsync<EmbeddingResponse>(_jsonOptions);
         return result!.Data[0].Embedding.ToArray();
