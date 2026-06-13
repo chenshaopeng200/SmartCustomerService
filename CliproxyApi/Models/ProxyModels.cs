@@ -23,6 +23,7 @@ public class ChatResponse
     public string Reply { get; set; } = string.Empty;
     public List<string> Sources { get; set; } = new();
     public List<string> Citations { get; set; } = new();
+    public List<string> ContextTexts { get; set; } = new();
 }
 
 public class LLMChatMessage

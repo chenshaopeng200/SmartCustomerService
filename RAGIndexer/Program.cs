@@ -11,6 +11,7 @@ using HtmlAgilityPack;
 
 var config = new ConfigurationBuilder()
     .AddJsonFile("appsettings.json")
+    .AddEnvironmentVariables()
     .Build();
 
 var cliproxyBaseUrl = config["CliproxyApi:BaseUrl"]!;

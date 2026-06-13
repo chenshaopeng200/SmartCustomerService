@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using CustomerService.Models;
 using CustomerService.Services;
 using Prometheus;
@@ -22,6 +23,7 @@ public class CustomerController : ControllerBase
     }
 
     [HttpPost("chat")]
+    [EnableRateLimiting("chat")]
     public async Task<ActionResult<CustomerChatResponse>> Chat([FromBody] CustomerChatRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.Message))
@@ -42,7 +44,6 @@ public class CustomerController : ControllerBase
         {
             var response = await _aiService.ChatAsync(request.UserId, request.Message);
             PrometheusMetrics.ChatRequestsTotal.WithLabels("ok").Inc();
-            PrometheusMetrics.ActiveSessions.Set(1);
             return response;
         }
         catch (HttpRequestException ex)
@@ -75,6 +76,7 @@ public class CustomerController : ControllerBase
     }
 
     [HttpPost("chat/stream")]
+    [EnableRateLimiting("chat")]
     public async Task ChatStream([FromBody] CustomerChatRequest request)
     {
         Response.ContentType = "text/event-stream";

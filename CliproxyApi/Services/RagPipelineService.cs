@@ -42,7 +42,7 @@ public class RagPipelineService
         _rrfConstant = int.Parse(config["RAG:HybridSearch:RrfConstant"] ?? "60");
     }
 
-    public async Task<(string Reply, List<string> Sources, List<string> Citations)> ExecuteAsync(
+    public async Task<(string Reply, List<string> Sources, List<string> Citations, List<string> ContextTexts)> ExecuteAsync(
         string query, List<(string Role, string Content)>? history = null, RagFeatureOverrides? featureOverrides = null)
     {
         _logger.LogInformation("RAG pipeline started");
@@ -52,7 +52,7 @@ public class RagPipelineService
         if (contextResult == null)
         {
             var fallbackReply = await _llmService.ChatDirect(query);
-            return (fallbackReply, new List<string>(), new List<string>());
+            return (fallbackReply, new List<string>(), new List<string>(), new List<string>());
         }
 
         var (context, _, _) = contextResult.Value;
@@ -68,9 +68,10 @@ public class RagPipelineService
         }
 
         var sources = contextResult.Value.Docs.Select(d => d.Source).Distinct().ToList();
+        var contextTexts = contextResult.Value.Docs.Select(d => d.Text).ToList();
         var citations = ExtractCitations(answer);
 
-        return (answer, sources, citations);
+        return (answer, sources, citations, contextTexts);
     }
 
     public async Task<List<LLMChatMessage>> BuildMessagesAsync(

@@ -86,55 +86,82 @@ export default {
       this.streaming = true
       this.debug = 'sending'
 
-      try {
-        const headers = { 'Content-Type': 'application/json' }
-        if (this.token) headers['Authorization'] = `Bearer ${this.token}`
+      const maxRetries = 3
+      let lastError = null
 
-        const response = await fetch('/api/customer/chat/stream', {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({
-            userId: this.username || 'anonymous',
-            message
+      for (let attempt = 0; attempt < maxRetries; attempt++) {
+        try {
+          const headers = { 'Content-Type': 'application/json' }
+          if (this.token) headers['Authorization'] = `Bearer ${this.token}`
+
+          const controller = new AbortController()
+          const timeoutId = setTimeout(() => controller.abort(), 60000)
+
+          const response = await fetch('/api/customer/chat/stream', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+              userId: this.username || 'anonymous',
+              message
+            }),
+            signal: controller.signal
           })
-        })
 
-        if (!response.ok) throw new Error(`HTTP ${response.status}`)
-        if (!response.body) throw new Error('Response body is null')
+          clearTimeout(timeoutId)
 
-        const reader = response.body.getReader()
-        const decoder = new TextDecoder()
-        let buffer = ''
-        let idx = this.messages.length - 1
+          if (!response.ok) throw new Error(`HTTP ${response.status}`)
+          if (!response.body) throw new Error('Response body is null')
 
-        while (true) {
-          const { done, value } = await reader.read()
-          if (done) break
-          buffer += decoder.decode(value, { stream: true })
-          const lines = buffer.split('\n')
-          buffer = lines.pop() || ''
+          const reader = response.body.getReader()
+          const decoder = new TextDecoder()
+          let buffer = ''
+          let idx = this.messages.length - 1
+          this.messages[idx].content = ''
 
-          for (const line of lines) {
-            if (!line.startsWith('data: ')) continue
-            const data = line.slice(6)
-            if (data === '[DONE]') continue
-            if (data.startsWith('[ERROR]')) {
-              this.messages[idx].content = data.replace('[ERROR] ', '')
-              continue
+          while (true) {
+            const { done, value } = await reader.read()
+            if (done) break
+            buffer += decoder.decode(value, { stream: true })
+            const lines = buffer.split('\n')
+            buffer = lines.pop() || ''
+
+            for (const line of lines) {
+              if (!line.startsWith('data: ')) continue
+              const data = line.slice(6)
+              if (data === '[DONE]') continue
+              if (data.startsWith('[ERROR]')) {
+                this.messages[idx].content = data.replace('[ERROR] ', '')
+                continue
+              }
+              if (data.startsWith('[STATUS]')) {
+                this.messages[idx].content = data.replace('[STATUS] ', '')
+                continue
+              }
+              this.messages[idx].content += data
             }
-            this.messages[idx].content += data
+          }
+
+          this.debug = 'done'
+          this.highlightCitations(idx)
+          lastError = null
+          break
+        } catch (err) {
+          lastError = err
+          this.debug = `error (attempt ${attempt + 1}/${maxRetries}): ${err.message}`
+          if (attempt < maxRetries - 1) {
+            const delay = Math.min(1000 * Math.pow(2, attempt), 8000)
+            await new Promise(r => setTimeout(r, delay))
           }
         }
-
-        this.debug = 'done'
-        this.highlightCitations(idx)
-      } catch (err) {
-        const lastIdx = this.messages.length - 1
-        this.messages[lastIdx].content = '连接失败：' + err.message
-        this.debug = 'error: ' + err.message
-      } finally {
-        this.streaming = false
       }
+
+      if (lastError) {
+        const lastIdx = this.messages.length - 1
+        if (!this.messages[lastIdx].content) {
+          this.messages[lastIdx].content = `连接失败（已重试${maxRetries}次）：${lastError.message}`
+        }
+      }
+      this.streaming = false
     },
     highlightCitations(idx) {
       const msg = this.messages[idx]

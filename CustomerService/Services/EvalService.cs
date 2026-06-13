@@ -28,8 +28,11 @@ public class EvalService
         var proxyResponse = await response.Content.ReadFromJsonAsync<ProxyChatResponse>();
         var answer = proxyResponse!.Reply;
         var sources = proxyResponse.Sources;
+        var contextTexts = proxyResponse.ContextTexts;
 
-        var contextStr = string.Join("\n---\n", sources);
+        var contextStr = contextTexts.Count > 0
+            ? string.Join("\n---\n", contextTexts)
+            : string.Join("\n---\n", sources);
 
         var faithfulness = await EvaluateFaithfulnessAsync(query, answer, contextStr);
         var relevance = await EvaluateRelevanceAsync(query, answer);
@@ -94,7 +97,10 @@ public class EvalService
         var proxyResponse = await response.Content.ReadFromJsonAsync<ProxyChatResponse>();
         var answer = proxyResponse!.Reply;
         var sources = proxyResponse.Sources;
-        var contextStr = string.Join("\n---\n", sources);
+        var contextTexts = proxyResponse.ContextTexts;
+        var contextStr = contextTexts.Count > 0
+            ? string.Join("\n---\n", contextTexts)
+            : string.Join("\n---\n", sources);
 
         var faithfulness = await EvaluateFaithfulnessAsync(query, answer, contextStr);
         var relevance = await EvaluateRelevanceAsync(query, answer);

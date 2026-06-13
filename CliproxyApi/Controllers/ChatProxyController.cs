@@ -27,13 +27,14 @@ public class ChatProxyController : ControllerBase
         {
             if (request.UseRag)
             {
-                var (reply, sources, citations) = await _ragPipeline.ExecuteAsync(request.Message, request.History, request.FeatureOverrides);
+                var (reply, sources, citations, contextTexts) = await _ragPipeline.ExecuteAsync(request.Message, request.History, request.FeatureOverrides);
                 PrometheusMetrics.ChatRequestsTotal.WithLabels("ok").Inc();
                 return new ChatResponse
                 {
                     Reply = reply,
                     Sources = sources,
-                    Citations = citations
+                    Citations = citations,
+                    ContextTexts = contextTexts
                 };
             }
 
@@ -76,7 +77,11 @@ public class ChatProxyController : ControllerBase
         {
             if (request.UseRag)
             {
+                await Response.WriteAsync("data: [STATUS] 正在检索知识库...\n\n");
+                await Response.Body.FlushAsync();
                 var messages = await _ragPipeline.BuildMessagesAsync(request.Message, request.History, request.FeatureOverrides);
+                await Response.WriteAsync("data: [STATUS] 正在生成回答...\n\n");
+                await Response.Body.FlushAsync();
                 await foreach (var token in _llmService.StreamChatAsync(messages))
                 {
                     await Response.WriteAsync($"data: {token}\n\n");

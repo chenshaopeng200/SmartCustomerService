@@ -7,6 +7,7 @@ public class SessionService
 {
     private readonly IDatabase _db;
     private readonly int _ttlMinutes;
+    private readonly int _maxMessages;
     private static readonly JsonSerializerOptions _jsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
@@ -16,6 +17,7 @@ public class SessionService
     {
         var connString = config["Redis:ConnectionString"] ?? "localhost:6379";
         _ttlMinutes = int.Parse(config["Session:TtlMinutes"] ?? "30");
+        _maxMessages = int.Parse(config["Session:MaxMessages"] ?? "50");
         var redis = ConnectionMultiplexer.Connect(connString);
         _db = redis.GetDatabase();
     }
@@ -23,19 +25,26 @@ public class SessionService
     public async Task AddMessageAsync(string userId, string role, string content)
     {
         var key = $"session:{userId}";
-        var messages = await GetMessagesAsync(userId);
-        messages.Add(new ChatMessage { Role = role, Content = content, Timestamp = DateTime.UtcNow });
-        var json = JsonSerializer.Serialize(messages, _jsonOptions);
-        await _db.StringSetAsync(key, json, TimeSpan.FromMinutes(_ttlMinutes));
+        var msg = new ChatMessage { Role = role, Content = content, Timestamp = DateTime.UtcNow };
+        var json = JsonSerializer.Serialize(msg, _jsonOptions);
+        await _db.ListRightPushAsync(key, json);
+        await _db.KeyExpireAsync(key, TimeSpan.FromMinutes(_ttlMinutes));
+        await _db.ListTrimAsync(key, -_maxMessages, -1);
     }
 
     public async Task<List<ChatMessage>> GetMessagesAsync(string userId)
     {
         var key = $"session:{userId}";
-        var json = await _db.StringGetAsync(key);
-        if (json.IsNull)
+        var values = await _db.ListRangeAsync(key);
+        if (values.Length == 0)
             return new List<ChatMessage>();
-        return JsonSerializer.Deserialize<List<ChatMessage>>(json!, _jsonOptions) ?? new List<ChatMessage>();
+        var messages = new List<ChatMessage>(values.Length);
+        foreach (var v in values)
+        {
+            var msg = JsonSerializer.Deserialize<ChatMessage>(v!, _jsonOptions);
+            if (msg != null) messages.Add(msg);
+        }
+        return messages;
     }
 
     public async Task ClearSessionAsync(string userId)

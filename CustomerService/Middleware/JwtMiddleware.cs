@@ -14,7 +14,7 @@ public class JwtMiddleware
     public JwtMiddleware(RequestDelegate next, IConfiguration config, ILogger<JwtMiddleware> logger)
     {
         _next = next;
-        _secret = config["Jwt:Secret"] ?? "SmartCustomerServiceSecretKey2024!@#$%";
+        _secret = config["Jwt:Secret"] ?? throw new InvalidOperationException("Jwt:Secret is not configured");
         _logger = logger;
     }
 

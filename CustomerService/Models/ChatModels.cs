@@ -27,6 +27,7 @@ public class ProxyChatResponse
     public string Reply { get; set; } = string.Empty;
     public List<string> Sources { get; set; } = new();
     public List<string> Citations { get; set; } = new();
+    public List<string> ContextTexts { get; set; } = new();
 }
 
 public class RagFeatureFlags
@@ -35,8 +36,8 @@ public class RagFeatureFlags
     public bool EnableHyDE { get; set; } = true;
     public bool EnableHybridSearch { get; set; } = true;
     public bool EnableReranking { get; set; } = true;
-    public bool EnableContextCompression { get; set; } = true;
-    public bool EnableSelfConsistency { get; set; } = true;
+    public bool EnableContextCompression { get; set; } = false;
+    public bool EnableSelfConsistency { get; set; } = false;
 }
 
 public class EvalRequest
