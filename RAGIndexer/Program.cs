@@ -6,6 +6,9 @@ using Microsoft.Extensions.Configuration;
 using Qdrant.Client;
 using Qdrant.Client.Grpc;
 using UglyToad.PdfPig;
+using iText.Kernel.Pdf;
+using iText.Kernel.Pdf.Canvas.Parser;
+using iText.Kernel.Pdf.Canvas.Parser.Listener;
 using DocumentFormat.OpenXml.Packaging;
 using HtmlAgilityPack;
 
@@ -224,8 +227,38 @@ static string ExtractText(string path)
 
 static string ExtractFromPdf(string path)
 {
+    try
+    {
+        return ExtractFromPdfWithIText(path);
+    }
+    catch
+    {
+        // Fall back to PdfPig if iText7 fails
+        return ExtractFromPdfWithPdfPig(path);
+    }
+}
+
+static string ExtractFromPdfWithIText(string path)
+{
     var sb = new StringBuilder();
-    using var pdf = PdfDocument.Open(path);
+    using var reader = new PdfReader(path);
+    using var pdfDoc = new iText.Kernel.Pdf.PdfDocument(reader);
+    for (int i = 1; i <= pdfDoc.GetNumberOfPages(); i++)
+    {
+        var page = pdfDoc.GetPage(i);
+        // Use LocationTextExtractionStrategy for better CJK handling
+        var strategy = new LocationTextExtractionStrategy();
+        var processor = new iText.Kernel.Pdf.Canvas.Parser.PdfCanvasProcessor(strategy);
+        processor.ProcessPageContent(page);
+        sb.AppendLine(strategy.GetResultantText());
+    }
+    return sb.ToString();
+}
+
+static string ExtractFromPdfWithPdfPig(string path)
+{
+    var sb = new StringBuilder();
+    using var pdf = UglyToad.PdfPig.PdfDocument.Open(path);
     foreach (var page in pdf.GetPages())
         sb.AppendLine(page.Text);
     return sb.ToString();
