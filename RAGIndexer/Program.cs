@@ -275,10 +275,22 @@ static string[] SplitTextIntoChunks(string text, int maxChunkSize, int overlap)
 
 static async Task<float[]> GetEmbedding(HttpClient client, string model, string text)
 {
-    var requestBody = new { model, input = text, input_type = "passage" };
-    var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
+    // NVIDIA nv-embedqa-e5-v5 has a 512 token limit; ~350 chars safe for CJK text
+    var input = text.Length > 350 ? text[..350] : text;
+
+    var requestBody = new { model, input, input_type = "passage" };
+    var jsonBody = JsonSerializer.Serialize(requestBody);
+    var content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
     var response = await client.PostAsync("embeddings", content);
-    response.EnsureSuccessStatusCode();
+
+    if (!response.IsSuccessStatusCode)
+    {
+        var errorBody = await response.Content.ReadAsStringAsync();
+        throw new HttpRequestException(
+            $"Embedding API returned {response.StatusCode}: {errorBody}. " +
+            $"Input length: {input.Length}, first 100 chars: {input[..Math.Min(100, input.Length)]}");
+    }
+
     var json = await response.Content.ReadFromJsonAsync<JsonElement>();
     return json.GetProperty("data")[0].GetProperty("embedding").EnumerateArray()
         .Select(e => e.GetSingle()).ToArray();
