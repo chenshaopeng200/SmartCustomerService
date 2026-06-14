@@ -12,6 +12,14 @@ builder.Services.AddSingleton<CliproxyApi.Services.HybridSearchService>();
 builder.Services.AddSingleton<CliproxyApi.Services.RerankerService>();
 builder.Services.AddSingleton<CliproxyApi.Services.ContextCompressorService>();
 builder.Services.AddSingleton<CliproxyApi.Services.SelfConsistencyService>();
+builder.Services.AddSingleton<CliproxyApi.Services.ToolRegistry>();
+builder.Services.AddSingleton<CliproxyApi.Services.ITool, CliproxyApi.Services.SearchKnowledgeBaseTool>();
+builder.Services.AddSingleton<CliproxyApi.Services.ITool, CliproxyApi.Services.CreateSupportTicketTool>();
+builder.Services.AddSingleton<CliproxyApi.Services.ITool, CliproxyApi.Services.EscalateToHumanTool>();
+builder.Services.AddSingleton<CliproxyApi.Services.ITool, CliproxyApi.Services.GetOrderStatusTool>();
+builder.Services.AddSingleton<CliproxyApi.Services.ITool, CliproxyApi.Services.GetProductInfoTool>();
+builder.Services.AddSingleton<CliproxyApi.Services.ITool, CliproxyApi.Services.CollectFeedbackTool>();
+builder.Services.AddSingleton<CliproxyApi.Services.FunctionCallingService>();
 builder.Services.AddSingleton<CliproxyApi.Services.RagPipelineService>();
 
 var app = builder.Build();

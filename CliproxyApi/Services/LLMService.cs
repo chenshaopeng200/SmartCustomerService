@@ -13,7 +13,8 @@ public class LLMService
     private readonly ILogger<LLMService> _logger;
     private static readonly JsonSerializerOptions _jsonOptions = new()
     {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
     };
 
     public LLMService(IConfiguration config, ILogger<LLMService> logger)
@@ -52,7 +53,7 @@ public class LLMService
             new() { Role = "user", Content = userMessage }
         };
 
-        return await Chat(messages);
+        return await Chat(messages) ?? string.Empty;
     }
 
     public async Task<string> ChatWithAnchoredContext(string context, string userMessage)
@@ -63,7 +64,7 @@ public class LLMService
             new() { Role = "user", Content = userMessage }
         };
 
-        return await Chat(messages);
+        return await Chat(messages) ?? string.Empty;
     }
 
     public async Task<string> ChatDirect(string userMessage)
@@ -73,12 +74,32 @@ public class LLMService
             new() { Role = "user", Content = userMessage }
         };
 
-        return await Chat(messages);
+        return await Chat(messages) ?? string.Empty;
     }
 
     public async Task<string> ChatWithMessages(List<LLMChatMessage> messages)
     {
-        return await Chat(messages);
+        return await Chat(messages) ?? string.Empty;
+    }
+
+    public async Task<LLMChatResponse> ChatWithTools(
+        List<LLMChatMessage> messages,
+        List<ToolDefinition>? tools,
+        string? toolChoice = null)
+    {
+        PrometheusMetrics.LlmCallsTotal.WithLabels("chat").Inc();
+        var request = new LLMChatRequest
+        {
+            Model = _chatModel,
+            Messages = messages,
+            Tools = tools,
+            ToolChoice = toolChoice
+        };
+        var content = new StringContent(JsonSerializer.Serialize(request, _jsonOptions), Encoding.UTF8, "application/json");
+        var response = await _httpClient.PostAsync("/v1/chat/completions", content);
+        response.EnsureSuccessStatusCode();
+        var result = await response.Content.ReadFromJsonAsync<LLMChatResponse>(_jsonOptions);
+        return result!;
     }
 
     public async Task<bool> EvaluateAsync(string prompt)
@@ -90,7 +111,7 @@ public class LLMService
         };
 
         var result = await Chat(messages);
-        return result.Trim().ToUpperInvariant().StartsWith("YES");
+        return (result ?? string.Empty).Trim().ToUpperInvariant().StartsWith("YES");
     }
 
     public async IAsyncEnumerable<string> StreamChatAsync(List<LLMChatMessage> messages)
@@ -141,7 +162,7 @@ public class LLMService
         }
     }
 
-    private async Task<string> Chat(List<LLMChatMessage> messages)
+    private async Task<string?> Chat(List<LLMChatMessage> messages)
     {
         PrometheusMetrics.LlmCallsTotal.WithLabels("chat").Inc();
         var request = new LLMChatRequest { Model = _chatModel, Messages = messages };

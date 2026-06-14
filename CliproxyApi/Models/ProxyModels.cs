@@ -16,6 +16,7 @@ public class RagFeatureOverrides
     public bool? EnableReranking { get; set; }
     public bool? EnableContextCompression { get; set; }
     public bool? EnableSelfConsistency { get; set; }
+    public bool? EnableTools { get; set; }
 }
 
 public class ChatResponse
@@ -29,13 +30,17 @@ public class ChatResponse
 public class LLMChatMessage
 {
     public string Role { get; set; } = "user";
-    public string Content { get; set; } = string.Empty;
+    public string? Content { get; set; }
+    public string? ToolCallId { get; set; }
+    public List<ToolCall>? ToolCalls { get; set; }
 }
 
 public class LLMChatRequest
 {
     public string Model { get; set; } = string.Empty;
     public List<LLMChatMessage> Messages { get; set; } = new();
+    public List<ToolDefinition>? Tools { get; set; }
+    public string? ToolChoice { get; set; }
 }
 
 public class LLMChatResponse
@@ -70,4 +75,31 @@ public class QdrantSearchResult
     public string Text { get; set; } = string.Empty;
     public string Source { get; set; } = string.Empty;
     public double Score { get; set; }
+}
+
+// Function Calling models
+public class ToolDefinition
+{
+    public string Type { get; set; } = "function";
+    public FunctionDefinition Function { get; set; } = new();
+}
+
+public class FunctionDefinition
+{
+    public string Name { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public object Parameters { get; set; } = new();
+}
+
+public class ToolCall
+{
+    public string Id { get; set; } = string.Empty;
+    public string Type { get; set; } = "function";
+    public FunctionCall Function { get; set; } = new();
+}
+
+public class FunctionCall
+{
+    public string Name { get; set; } = string.Empty;
+    public string Arguments { get; set; } = "{}";
 }

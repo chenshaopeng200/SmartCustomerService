@@ -12,6 +12,8 @@ public class RagPipelineService
     private readonly RerankerService _reranker;
     private readonly ContextCompressorService _compressor;
     private readonly SelfConsistencyService _selfConsistency;
+    private readonly FunctionCallingService _functionCalling;
+    private readonly ToolRegistry _toolRegistry;
     private readonly RagPipelineConfig _config;
     private readonly int _finalTopK;
     private readonly int _vectorTopK;
@@ -23,7 +25,8 @@ public class RagPipelineService
         QdrantService qdrantService, LLMService llmService,
         QueryRewriterService queryRewriter, HybridSearchService hybridSearch,
         RerankerService reranker, ContextCompressorService compressor,
-        SelfConsistencyService selfConsistency, IConfiguration config,
+        SelfConsistencyService selfConsistency, FunctionCallingService functionCalling,
+        ToolRegistry toolRegistry, IConfiguration config,
         ILogger<RagPipelineService> logger)
     {
         _qdrantService = qdrantService;
@@ -33,6 +36,8 @@ public class RagPipelineService
         _reranker = reranker;
         _compressor = compressor;
         _selfConsistency = selfConsistency;
+        _functionCalling = functionCalling;
+        _toolRegistry = toolRegistry;
         _logger = logger;
 
         _config = config.GetSection("RAG:Features").Get<RagPipelineConfig>() ?? new RagPipelineConfig();
@@ -47,6 +52,14 @@ public class RagPipelineService
     {
         _logger.LogInformation("RAG pipeline started");
         using var timer = PrometheusMetrics.RagPipelineDuration.NewTimer();
+
+        var enableTools = featureOverrides?.EnableTools ?? false;
+        if (enableTools)
+        {
+            _logger.LogInformation("Function Calling mode enabled");
+            var messages = await BuildMessagesAsync(query, history, featureOverrides);
+            return await _functionCalling.RunAsync(messages);
+        }
 
         var contextResult = await BuildContextAsync(query, history, featureOverrides);
         if (contextResult == null)

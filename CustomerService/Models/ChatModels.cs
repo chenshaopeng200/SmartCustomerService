@@ -38,6 +38,7 @@ public class RagFeatureFlags
     public bool EnableReranking { get; set; } = true;
     public bool EnableContextCompression { get; set; } = false;
     public bool EnableSelfConsistency { get; set; } = false;
+    public bool EnableTools { get; set; } = false;
 }
 
 public class EvalRequest
