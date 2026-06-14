@@ -56,8 +56,8 @@ public class RagPipelineService
         var enableTools = featureOverrides?.EnableTools ?? false;
         if (enableTools)
         {
-            _logger.LogInformation("Function Calling mode enabled");
-            var messages = await BuildMessagesAsync(query, history, featureOverrides);
+            _logger.LogInformation("Function Calling mode enabled (lightweight, no RAG preload)");
+            var messages = BuildToolModeMessages(query, history);
             return await _functionCalling.RunAsync(messages);
         }
 
@@ -110,6 +110,21 @@ public class RagPipelineService
 {historyStr}
 参考知识：
 {context}" },
+            new() { Role = "user", Content = query }
+        };
+    }
+
+    private static List<LLMChatMessage> BuildToolModeMessages(
+        string query, List<(string Role, string Content)>? history)
+    {
+        var historyStr = "";
+        if (history != null && history.Count > 0)
+            historyStr = "之前的对话：\n" + string.Join("\n", history.Select(h => $"{h.Role}: {h.Content}")) + "\n\n";
+
+        var systemPrompt = $"你是智能客服助手。如需查询知识库，使用 search_knowledge_base 工具。\n{historyStr}".TrimEnd();
+        return new List<LLMChatMessage>
+        {
+            new() { Role = "system", Content = systemPrompt },
             new() { Role = "user", Content = query }
         };
     }

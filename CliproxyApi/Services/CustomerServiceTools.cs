@@ -34,7 +34,12 @@ public class SearchKnowledgeBaseTool : ITool
         var results = await _qdrantService.RetrieveRelevantChunks(query, topK);
         return JsonSerializer.Serialize(new
         {
-            results = results.Select(r => new { r.Text, r.Source, r.Score })
+            results = results.Select(r => new
+            {
+                text = r.Text.Length > 200 ? r.Text[..200] + "..." : r.Text,
+                r.Source,
+                r.Score
+            })
         });
     }
 }
