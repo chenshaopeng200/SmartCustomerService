@@ -89,12 +89,49 @@ public static class FileConverter
             }
             else if (text.Length > 0)
             {
-                sb.AppendLine(text);
+                // Preserve bold/italic formatting from runs
+                var formatted = FormatRuns(para);
+                sb.AppendLine(formatted);
             }
             sb.AppendLine(); // blank line between paragraphs
         }
 
         return NormalizeMarkdown(sb.ToString());
+    }
+
+    /// <summary>
+    /// Format paragraph runs with Markdown bold (*text*) and italic (**text**) syntax.
+    /// </summary>
+    private static string FormatRuns(Paragraph para)
+    {
+        var sb = new StringBuilder();
+        foreach (var run in para.Elements<Run>())
+        {
+            var text = run.InnerText;
+            if (string.IsNullOrWhiteSpace(text)) continue;
+
+            var rPr = run.RunProperties;
+            if (rPr == null)
+            {
+                sb.Append(text);
+                continue;
+            }
+
+            // Bold: w:b element present
+            bool isBold = rPr.Bold != null && (rPr.Bold.Val == null || rPr.Bold.Val == true);
+            // Italic: w:italic element present
+            bool isItalic = rPr.Italic != null && (rPr.Italic.Val == null || rPr.Italic.Val == true);
+
+            if (isBold && isItalic)
+                sb.Append($"***{text}***");
+            else if (isBold)
+                sb.Append($"**{text}**");
+            else if (isItalic)
+                sb.Append($"_{text}_");
+            else
+                sb.Append(text);
+        }
+        return sb.ToString();
     }
 
     private static string ConvertExcel(string path)
