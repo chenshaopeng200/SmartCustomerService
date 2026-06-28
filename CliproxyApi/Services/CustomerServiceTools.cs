@@ -9,15 +9,14 @@ public class SearchKnowledgeBaseTool : ITool
 
     public string Name => "search_knowledge_base";
     public string Description => "搜索知识库，查找与查询相关的文档资料";
-    public object Parameters => new
+    public JsonSchema Parameters => new()
     {
-        type = "object",
-        properties = new
+        Properties = new Dictionary<string, JsonSchemaProperty>
         {
-            query = new { type = "string", description = "搜索查询关键词" },
-            top_k = new { type = "integer", description = "返回结果数量，默认3", @default = 3 }
+            ["query"] = new() { Type = "string", Description = "搜索查询关键词" },
+            ["top_k"] = new() { Type = "integer", Description = "返回结果数量，默认3", Minimum = 1, Maximum = 20 }
         },
-        required = new[] { "query" }
+        Required = new[] { "query" }
     };
 
     public SearchKnowledgeBaseTool(QdrantService qdrantService)
@@ -48,16 +47,15 @@ public class CreateSupportTicketTool : ITool
 {
     public string Name => "create_support_ticket";
     public string Description => "创建客服工单";
-    public object Parameters => new
+    public JsonSchema Parameters => new()
     {
-        type = "object",
-        properties = new
+        Properties = new Dictionary<string, JsonSchemaProperty>
         {
-            title = new { type = "string", description = "工单标题" },
-            description = new { type = "string", description = "工单描述" },
-            priority = new { type = "string", @enum = new[] { "low", "medium", "high" }, description = "优先级" }
+            ["title"] = new() { Type = "string", Description = "工单标题" },
+            ["description"] = new() { Type = "string", Description = "工单描述" },
+            ["priority"] = new() { Type = "string", Description = "优先级", Enum = new[] { "low", "medium", "high" } }
         },
-        required = new[] { "title", "description" }
+        Required = new[] { "title", "description" }
     };
 
     public Task<string> ExecuteAsync(string argumentsJson)
@@ -78,15 +76,14 @@ public class EscalateToHumanTool : ITool
 {
     public string Name => "escalate_to_human";
     public string Description => "将问题转接给人工客服";
-    public object Parameters => new
+    public JsonSchema Parameters => new()
     {
-        type = "object",
-        properties = new
+        Properties = new Dictionary<string, JsonSchemaProperty>
         {
-            reason = new { type = "string", description = "转接原因" },
-            summary = new { type = "string", description = "问题摘要" }
+            ["reason"] = new() { Type = "string", Description = "转接原因" },
+            ["summary"] = new() { Type = "string", Description = "问题摘要" }
         },
-        required = new[] { "reason", "summary" }
+        Required = new[] { "reason", "summary" }
     };
 
     public Task<string> ExecuteAsync(string argumentsJson)
@@ -104,14 +101,13 @@ public class GetOrderStatusTool : ITool
 {
     public string Name => "get_order_status";
     public string Description => "根据订单ID查询订单状态";
-    public object Parameters => new
+    public JsonSchema Parameters => new()
     {
-        type = "object",
-        properties = new
+        Properties = new Dictionary<string, JsonSchemaProperty>
         {
-            order_id = new { type = "string", description = "订单ID" }
+            ["order_id"] = new() { Type = "string", Description = "订单ID" }
         },
-        required = new[] { "order_id" }
+        Required = new[] { "order_id" }
     };
 
     public Task<string> ExecuteAsync(string argumentsJson)
@@ -132,14 +128,13 @@ public class GetProductInfoTool : ITool
 {
     public string Name => "get_product_info";
     public string Description => "根据产品名称查询产品详细信息";
-    public object Parameters => new
+    public JsonSchema Parameters => new()
     {
-        type = "object",
-        properties = new
+        Properties = new Dictionary<string, JsonSchemaProperty>
         {
-            product_name = new { type = "string", description = "产品名称" }
+            ["product_name"] = new() { Type = "string", Description = "产品名称" }
         },
-        required = new[] { "product_name" }
+        Required = new[] { "product_name" }
     };
 
     public Task<string> ExecuteAsync(string argumentsJson)
@@ -161,15 +156,14 @@ public class CollectFeedbackTool : ITool
 {
     public string Name => "collect_feedback";
     public string Description => "收集用户对服务的反馈评价";
-    public object Parameters => new
+    public JsonSchema Parameters => new()
     {
-        type = "object",
-        properties = new
+        Properties = new Dictionary<string, JsonSchemaProperty>
         {
-            rating = new { type = "integer", description = "评分 1-5", minimum = 1, maximum = 5 },
-            comment = new { type = "string", description = "评价内容" }
+            ["rating"] = new() { Type = "integer", Description = "评分 1-5", Minimum = 1, Maximum = 5 },
+            ["comment"] = new() { Type = "string", Description = "评价内容" }
         },
-        required = new[] { "rating" }
+        Required = new[] { "rating" }
     };
 
     public Task<string> ExecuteAsync(string argumentsJson)

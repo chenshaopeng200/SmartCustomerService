@@ -228,11 +228,14 @@ public class RagPipelineService
 
     private List<string> ExtractCitations(string answer)
     {
+        var matches = System.Text.RegularExpressions.Regex.Matches(answer, @"\[\d+\]");
+        var seen = new HashSet<string>();
         var citations = new List<string>();
-        for (int i = 1; i <= 20; i++)
+        foreach (System.Text.RegularExpressions.Match m in matches)
         {
-            if (answer.Contains($"[{i}]"))
-                citations.Add($"[{i}]");
+            var marker = m.Value;
+            if (seen.Add(marker))
+                citations.Add(marker);
         }
         return citations;
     }

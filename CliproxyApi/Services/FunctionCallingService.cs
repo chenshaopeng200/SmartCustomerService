@@ -81,7 +81,7 @@ public class FunctionCallingService
             foreach (var toolCall in msg.ToolCalls)
             {
                 var toolName = toolCall.Function.Name;
-                var toolArgs = toolCall.Function.Arguments ?? "{}";
+                var toolArgs = string.IsNullOrWhiteSpace(toolCall.Function.Arguments) ? "{}" : toolCall.Function.Arguments;
                 _logger.LogInformation("Executing tool: {Tool} with args: {Args}", toolName, toolArgs);
 
                 string toolResult;

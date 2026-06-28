@@ -25,12 +25,12 @@ public class LLMService
         _chatModel = config["CliproxyApi:ChatModel"]!;
         _embeddingModel = config["EmbeddingApi:Model"] ?? config["CliproxyApi:EmbeddingModel"]!;
 
-        _httpClient = new HttpClient { BaseAddress = new Uri(baseUrl) };
+        _httpClient = new HttpClient { BaseAddress = new Uri(baseUrl), Timeout = TimeSpan.FromSeconds(30) };
         _httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {apiKey}");
 
         var embeddingBaseUrl = config["EmbeddingApi:BaseUrl"]!;
         var embeddingApiKey = config["EmbeddingApi:ApiKey"]!;
-        _embeddingHttpClient = new HttpClient { BaseAddress = new Uri(embeddingBaseUrl) };
+        _embeddingHttpClient = new HttpClient { BaseAddress = new Uri(embeddingBaseUrl), Timeout = TimeSpan.FromSeconds(30) };
         _embeddingHttpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {embeddingApiKey}");
     }
 
@@ -137,7 +137,7 @@ public class LLMService
         var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
         response.EnsureSuccessStatusCode();
 
-        using var stream = await response.Content.ReadAsStreamAsync();
+        await using var stream = await response.Content.ReadAsStreamAsync();
         using var reader = new StreamReader(stream);
 
         while (true)

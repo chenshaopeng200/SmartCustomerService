@@ -1,7 +1,11 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace CliproxyApi.Models;
 
 public class ChatRequest
 {
+    [Required(ErrorMessage = "消息不能为空")]
+    [MinLength(1, ErrorMessage = "消息不能为空")]
     public string Message { get; set; } = string.Empty;
     public bool UseRag { get; set; } = true;
     public List<(string Role, string Content)> History { get; set; } = new();
@@ -77,6 +81,30 @@ public class QdrantSearchResult
     public double Score { get; set; }
 }
 
+public class JsonSchemaProperty
+{
+    [System.Text.Json.Serialization.JsonPropertyName("type")]
+    public string Type { get; set; } = "string";
+    [System.Text.Json.Serialization.JsonPropertyName("description")]
+    public string? Description { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("enum")]
+    public string[]? Enum { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("minimum")]
+    public int? Minimum { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("maximum")]
+    public int? Maximum { get; set; }
+}
+
+public class JsonSchema
+{
+    [System.Text.Json.Serialization.JsonPropertyName("type")]
+    public string Type { get; set; } = "object";
+    [System.Text.Json.Serialization.JsonPropertyName("properties")]
+    public Dictionary<string, JsonSchemaProperty> Properties { get; set; } = new();
+    [System.Text.Json.Serialization.JsonPropertyName("required")]
+    public string[]? Required { get; set; }
+}
+
 // Function Calling models
 public class ToolDefinition
 {
@@ -88,7 +116,7 @@ public class FunctionDefinition
 {
     public string Name { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
-    public object Parameters { get; set; } = new();
+    public JsonSchema Parameters { get; set; } = new();
 }
 
 public class ToolCall
