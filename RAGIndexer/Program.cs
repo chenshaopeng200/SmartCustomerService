@@ -204,25 +204,37 @@ static bool IsSupported(string path) =>
     Path.GetExtension(path).ToLowerInvariant() switch
     {
         ".pdf" => true,
+        ".docx" => true,
+        ".xlsx" => true,
+        ".xls" => true,
         ".txt" => true,
         ".md" => true,
         ".html" => true,
         ".htm" => true,
-        ".docx" => true,
+        ".csv" => true,
         _ => false
     };
 
 static string ExtractText(string path)
 {
-    var ext = Path.GetExtension(path).ToLowerInvariant();
-    return ext switch
+    try
     {
-        ".pdf" => ExtractFromPdf(path),
-        ".txt" or ".md" => File.ReadAllText(path, Encoding.UTF8),
-        ".html" or ".htm" => ExtractFromHtml(path),
-        ".docx" => ExtractFromDocx(path),
-        _ => ""
-    };
+        return RAGIndexer.FileConverter.Convert(path);
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"  Warning: Conversion failed for {path}: {ex.Message}");
+        // Fallback to raw text extraction
+        var ext = Path.GetExtension(path).ToLowerInvariant();
+        return ext switch
+        {
+            ".pdf" => ExtractFromPdf(path),
+            ".docx" => ExtractFromDocx(path),
+            ".html" or ".htm" => ExtractFromHtml(path),
+            ".txt" or ".md" or ".csv" or ".xlsx" or ".xls" => File.ReadAllText(path, Encoding.UTF8),
+            _ => ""
+        };
+    }
 }
 
 static string ExtractFromPdf(string path)
@@ -233,9 +245,31 @@ static string ExtractFromPdf(string path)
     }
     catch
     {
-        // Fall back to PdfPig if iText7 fails
-        return ExtractFromPdfWithPdfPig(path);
+        try
+        {
+            return ExtractFromPdfWithPdfPig(path);
+        }
+        catch
+        {
+            return ExtractFromPdfWithFallback(path);
+        }
     }
+}
+
+static string ExtractFromPdfWithFallback(string path)
+{
+    var sb = new StringBuilder();
+    using var reader = new PdfReader(path);
+    using var pdfDoc = new iText.Kernel.Pdf.PdfDocument(reader);
+    for (int i = 1; i <= pdfDoc.GetNumberOfPages(); i++)
+    {
+        var page = pdfDoc.GetPage(i);
+        var strategy = new iText.Kernel.Pdf.Canvas.Parser.Listener.LocationTextExtractionStrategy();
+        var processor = new iText.Kernel.Pdf.Canvas.Parser.PdfCanvasProcessor(strategy);
+        processor.ProcessPageContent(page);
+        sb.AppendLine("PAGE " + i + ": " + strategy.GetResultantText());
+    }
+    return sb.ToString();
 }
 
 static string ExtractFromPdfWithIText(string path)
