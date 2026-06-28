@@ -101,11 +101,14 @@ public static class FileConverter
         try
         {
             var rows = MiniExcel.Query(path, useHeaderRow: true);
-            var data = rows.Cast<System.Collections.IDictionary>().ToList();
+            var data = rows.Cast<dynamic>().ToList();
             if (data.Count == 0) return "";
 
-            // Get headers from first row keys
-            var headers = data[0].Keys.Cast<string>().ToList();
+            // ExpandoObject implements IEnumerable<KeyValuePair<string,object>>
+            var firstRowPairs = data[0] as IEnumerable<KeyValuePair<string, object>>;
+            if (firstRowPairs == null) return "[Excel: 无法获取表头]";
+
+            var headers = firstRowPairs.Select(kv => kv.Key).ToList();
 
             // Build markdown table
             var sb = new StringBuilder();
@@ -114,7 +117,9 @@ public static class FileConverter
 
             foreach (var row in data.Skip(1))
             {
-                var cells = headers.Select(h => (row[h]?.ToString()) ?? "").ToList();
+                var rowPairs = row as IEnumerable<KeyValuePair<string, object>>;
+                if (rowPairs == null) continue;
+                var cells = headers.Select(h => (rowPairs.FirstOrDefault(p => p.Key == h).Value?.ToString()) ?? "").ToList();
                 sb.AppendLine("| " + string.Join(" | ", cells) + " |");
             }
 
