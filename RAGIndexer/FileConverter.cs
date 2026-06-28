@@ -248,6 +248,25 @@ public static class FileConverter
         var lines = normalized.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         normalized = string.Join("\n", lines);
 
+        // Remove common PDF watermark/footer artifacts
+        var watermarks = new[]
+        {
+            @"PDF 文件使用 .* 试用版本创建.*",
+            @"www\.fineprint\.cn",
+            @"pdfFactory.*",
+            @"^Page \d+$",
+            @"^\d{4}-\d{2}-\d{2}[ 　]+\d{2}:\d{2}:\d{2}$", // timestamps
+        };
+        foreach (var pattern in watermarks)
+        {
+            normalized = Regex.Replace(normalized, pattern, "", RegexOptions.Multiline | RegexOptions.IgnoreCase);
+        }
+
+        // Clean up extra blank lines introduced by watermark removal
+        normalized = Regex.Replace(normalized, @"\n{3,}", "\n\n");
+        var finalLines = normalized.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        normalized = string.Join("\n", finalLines);
+
         return normalized.Trim();
     }
 }
