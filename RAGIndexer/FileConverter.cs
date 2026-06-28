@@ -138,17 +138,58 @@ public static class FileConverter
     {
         try
         {
-            var rows = MiniExcel.Query(path, useHeaderRow: true);
-            var data = rows.Cast<dynamic>().ToList();
-            if (data.Count == 0) return "";
+            // Read all sheets by iterating through sheet names
+            var sheetNames = GetSheetNames(path);
+            if (sheetNames == null || sheetNames.Count == 0)
+                return "[Excel: 无数据]";
 
-            // ExpandoObject implements IEnumerable<KeyValuePair<string,object>>
+            var sb = new StringBuilder();
+            foreach (var sheetName in sheetNames)
+            {
+                sb.AppendLine($"## Sheet: {sheetName}");
+                sb.AppendLine(ConvertExcelSheet(path, sheetName));
+                sb.AppendLine();
+            }
+            return sb.ToString().Trim();
+        }
+        catch
+        {
+            return $"[Excel文件 {Path.GetFileName(path)} 解析失败]";
+        }
+    }
+
+    /// <summary>
+    /// Get all sheet names from an Excel file.
+    /// </summary>
+    private static List<string> GetSheetNames(string path)
+    {
+        try
+        {
+            using var stream = File.OpenRead(path);
+            return stream.GetSheetNames();
+        }
+        catch
+        {
+            return new List<string>();
+        }
+    }
+
+    /// <summary>
+    /// Convert a single Excel sheet to Markdown table.
+    /// </summary>
+    private static string ConvertExcelSheet(string path, string sheetName)
+    {
+        try
+        {
+            var rows = MiniExcel.Query(path, useHeaderRow: true, sheetName: sheetName);
+            var data = rows.Cast<dynamic>().ToList();
+            if (data.Count == 0) return "_[空表格]_";
+
             var firstRowPairs = data[0] as IEnumerable<KeyValuePair<string, object>>;
-            if (firstRowPairs == null) return "[Excel: 无法获取表头]";
+            if (firstRowPairs == null) return "[无法获取表头]";
 
             var headers = firstRowPairs.Select(kv => kv.Key).ToList();
 
-            // Build markdown table
             var sb = new StringBuilder();
             sb.AppendLine("| " + string.Join(" | ", headers) + " |");
             sb.AppendLine("| " + string.Join(" | ", headers.Select(_ => "---")) + " |");
@@ -161,11 +202,11 @@ public static class FileConverter
                 sb.AppendLine("| " + string.Join(" | ", cells) + " |");
             }
 
-            return sb.ToString();
+            return sb.ToString().Trim();
         }
         catch
         {
-            return $"[Excel文件 {Path.GetFileName(path)} 解析失败]";
+            return "[解析失败]";
         }
     }
 
