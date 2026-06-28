@@ -93,20 +93,20 @@ public class HybridSearchService
                      .ToList();
     }
 
-    private Task EnsureIndexBuiltAsync()
+    private async Task EnsureIndexBuiltAsync()
     {
-        if (_docStore != null) return Task.CompletedTask;
+        if (_docStore != null) return;
 
         lock (_lock)
         {
-            if (_docStore != null) return Task.CompletedTask;
+            if (_docStore != null) return;
         }
 
-        var allChunks = _qdrantService.GetAllChunks();
+        var allChunks = await _qdrantService.GetAllChunksAsync();
         if (allChunks.Count == 0)
         {
             lock (_lock) { _docStore = new(); _idf = new(); }
-            return Task.CompletedTask;
+            return;
         }
 
         var docStore = new List<(string, string, string, double)>();
@@ -138,7 +138,6 @@ public class HybridSearchService
         }
 
         _logger.LogInformation("BM25 index built: {N} docs, {V} terms, avgLen={Avg:F1}", N, idf.Count, _avgDocLen);
-        return Task.CompletedTask;
     }
 
     private static List<string> Tokenize(string text)

@@ -21,12 +21,12 @@ public class QdrantService
         _client = new QdrantClient(host, port);
     }
 
-    public List<QdrantSearchResult> GetAllChunks()
+    public async Task<List<QdrantSearchResult>> GetAllChunksAsync()
     {
         try
         {
             var results = new List<QdrantSearchResult>();
-            var response = _client.ScrollAsync(_collectionName, limit: 1000).GetAwaiter().GetResult();
+            var response = await _client.ScrollAsync(_collectionName, limit: 1000);
             foreach (var p in response.Result)
             {
                 results.Add(new QdrantSearchResult

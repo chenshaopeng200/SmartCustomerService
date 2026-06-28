@@ -42,7 +42,14 @@ public class LLMService
         var response = await _embeddingHttpClient.PostAsync("embeddings", content);
         response.EnsureSuccessStatusCode();
         var result = await response.Content.ReadFromJsonAsync<EmbeddingResponse>(_jsonOptions);
-        return result!.Data[0].Embedding.ToArray();
+        if (result is null || result.Data is null || result.Data.Count == 0)
+        {
+            _logger.LogError("Embedding API returned unexpected response: result={ResultIsNull}, dataCount={DataCount}",
+                result is null, result?.Data?.Count ?? 0);
+            throw new InvalidOperationException(
+                "Embedding API returned an unexpected response. Please check the embedding service is healthy.");
+        }
+        return result.Data[0].Embedding.ToArray();
     }
 
     public async Task<string> ChatWithContext(string context, string userMessage)
@@ -99,7 +106,13 @@ public class LLMService
         var response = await _httpClient.PostAsync("/v1/chat/completions", content);
         response.EnsureSuccessStatusCode();
         var result = await response.Content.ReadFromJsonAsync<LLMChatResponse>(_jsonOptions);
-        return result!;
+        if (result is null || result.Choices is null || result.Choices.Count == 0)
+        {
+            _logger.LogError("Chat API returned unexpected response for {MessageCount} messages", messages.Count);
+            throw new InvalidOperationException(
+                "Chat API returned an unexpected response. Please check the chat service is healthy.");
+        }
+        return result;
     }
 
     public async Task<bool> EvaluateAsync(string prompt)
@@ -170,6 +183,28 @@ public class LLMService
         var response = await _httpClient.PostAsync("/v1/chat/completions", content);
         response.EnsureSuccessStatusCode();
         var result = await response.Content.ReadFromJsonAsync<LLMChatResponse>(_jsonOptions);
-        return result!.Choices[0].Message.Content;
+        if (result is null)
+        {
+            _logger.LogWarning("Chat API returned null response for {MessageCount} messages", messages.Count);
+            return null;
+        }
+        if (result.Choices is null || result.Choices.Count == 0)
+        {
+            _logger.LogWarning("Chat API returned empty choices for {MessageCount} messages", messages.Count);
+            return null;
+        }
+        var message = result.Choices[0].Message;
+        if (message is null)
+        {
+            _logger.LogWarning("Chat API returned null message in choice 0 for {MessageCount} messages", messages.Count);
+            return null;
+        }
+        var replyContent = message.Content;
+        if (string.IsNullOrEmpty(replyContent))
+        {
+            _logger.LogWarning("Chat API returned empty content in choice 0 for {MessageCount} messages", messages.Count);
+            return null;
+        }
+        return replyContent;
     }
 }

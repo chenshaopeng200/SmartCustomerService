@@ -50,6 +50,14 @@ public class FunctionCallingService
             _logger.LogInformation("FunctionCalling iteration {Iteration}/{Max}", i + 1, _maxIterations);
 
             var response = await _llmService.ChatWithTools(messages, tools);
+
+            // Guard: if Choices is null or empty, return a fallback answer
+            if (response.Choices == null || response.Choices.Count == 0)
+            {
+                _logger.LogWarning("Empty response choices on iteration {Iteration}", i + 1);
+                return ("Unable to process the request — please try again.", new(), new(), new());
+            }
+
             var choice = response.Choices[0];
             var msg = choice.Message;
 
@@ -77,21 +85,24 @@ public class FunctionCallingService
                 _logger.LogInformation("Executing tool: {Tool} with args: {Args}", toolName, toolArgs);
 
                 string toolResult;
-                using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(_toolTimeoutSeconds)))
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(_toolTimeoutSeconds));
+
+                try
                 {
-                    try
-                    {
-                        var task = _toolRegistry.ExecuteAsync(toolName, toolArgs);
-                        var completed = await Task.WhenAny(task, Task.Delay(_toolTimeoutSeconds, cts.Token));
-                        if (completed == task)
-                            toolResult = await task;
-                        else
-                            toolResult = JsonSerializer.Serialize(new { error = $"Tool execution timed out after {_toolTimeoutSeconds}s" });
-                    }
-                    catch (OperationCanceledException)
-                    {
+                    var task = _toolRegistry.ExecuteAsync(toolName, toolArgs);
+                    var completed = await Task.WhenAny(task, Task.Delay(int.MaxValue, cts.Token));
+                    if (completed == task)
+                        toolResult = await task;
+                    else
                         toolResult = JsonSerializer.Serialize(new { error = $"Tool execution timed out after {_toolTimeoutSeconds}s" });
-                    }
+                }
+                catch (OperationCanceledException)
+                {
+                    toolResult = JsonSerializer.Serialize(new { error = $"Tool execution timed out after {_toolTimeoutSeconds}s" });
+                }
+                catch (Exception ex)
+                {
+                    toolResult = JsonSerializer.Serialize(new { error = $"Tool execution failed: {ex.Message}" });
                 }
 
                 messages.Add(new LLMChatMessage
@@ -104,7 +115,6 @@ public class FunctionCallingService
         }
 
         _logger.LogWarning("FunctionCalling max iterations ({Max}) reached", _maxIterations);
-        var finalReply = await _llmService.ChatWithMessages(messages);
-        return (finalReply, new(), new(), new());
+        return ("The request could not be completed within the allowed number of tool calls. Please try again with a simpler request.", new(), new(), new());
     }
 }

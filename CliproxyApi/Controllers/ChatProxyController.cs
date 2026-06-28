@@ -10,13 +10,18 @@ public class ChatProxyController : ControllerBase
 {
     private readonly RagPipelineService _ragPipeline;
     private readonly LLMService _llmService;
+    private readonly FunctionCallingService _functionCalling;
+    private readonly ToolRegistry _toolRegistry;
     private readonly ILogger<ChatProxyController> _logger;
 
     public ChatProxyController(RagPipelineService ragPipeline, LLMService llmService,
+        FunctionCallingService functionCalling, ToolRegistry toolRegistry,
         ILogger<ChatProxyController> logger)
     {
         _ragPipeline = ragPipeline;
         _llmService = llmService;
+        _functionCalling = functionCalling;
+        _toolRegistry = toolRegistry;
         _logger = logger;
     }
 
@@ -75,40 +80,126 @@ public class ChatProxyController : ControllerBase
 
         try
         {
-            if (request.UseRag)
+            // Case 1: RAG + EnableTools → use FunctionCallingService (lightweight mode, no RAG preload)
+            if (request.UseRag && request.FeatureOverrides?.EnableTools == true)
             {
-                await Response.WriteAsync("data: [STATUS] 正在检索知识库...\n\n");
-                await Response.Body.FlushAsync();
-                var messages = await _ragPipeline.BuildMessagesAsync(request.Message, request.History, request.FeatureOverrides);
-                await Response.WriteAsync("data: [STATUS] 正在生成回答...\n\n");
-                await Response.Body.FlushAsync();
-                await foreach (var token in _llmService.StreamChatAsync(messages))
-                {
-                    await Response.WriteAsync($"data: {token}\n\n");
-                    await Response.Body.FlushAsync();
-                }
-            }
-            else
-            {
-                var messages = new List<LLMChatMessage>
-                {
-                    new() { Role = "user", Content = request.Message }
-                };
-                await foreach (var token in _llmService.StreamChatAsync(messages))
-                {
-                    await Response.WriteAsync($"data: {token}\n\n");
-                    await Response.Body.FlushAsync();
-                }
+                _logger.LogInformation("Streaming: RAG + Function Calling mode");
+                var toolMessages = BuildToolModeMessages(request.Message, request.History);
+                var (reply, _, _, _) = await _functionCalling.RunAsync(toolMessages);
+                await SendStreamingTokens(reply);
+                return;
             }
 
-            await Response.WriteAsync("data: [DONE]\n\n");
-            await Response.Body.FlushAsync();
+            // Case 2: RAG without tools → existing RAG streaming path (backward compatible)
+            if (request.UseRag)
+            {
+                _logger.LogInformation("Streaming: RAG mode");
+                await Response.WriteAsync("data: [STATUS] 正在检索知识库...\n\n");
+                await Response.Body.FlushAsync();
+                var ragMessages = await _ragPipeline.BuildMessagesAsync(request.Message, request.History, request.FeatureOverrides);
+                await Response.WriteAsync("data: [STATUS] 正在生成回答...\n\n");
+                await Response.Body.FlushAsync();
+                await foreach (var token in _llmService.StreamChatAsync(ragMessages))
+                {
+                    await SendStreamingToken(token);
+                }
+                return;
+            }
+
+            // Case 3: Non-RAG + EnableTools → Function Calling directly
+            if (request.FeatureOverrides?.EnableTools == true)
+            {
+                _logger.LogInformation("Streaming: Direct Function Calling mode");
+                var fcMessages = BuildToolModeMessages(request.Message, request.History);
+                var (reply, _, _, _) = await _functionCalling.RunAsync(fcMessages);
+                await SendStreamingTokens(reply);
+                return;
+            }
+
+            // Case 4: Simple direct chat
+            _logger.LogInformation("Streaming: Direct chat mode");
+            var chatMessages = new List<LLMChatMessage>
+            {
+                new() { Role = "user", Content = request.Message }
+            };
+            await foreach (var token in _llmService.StreamChatAsync(chatMessages))
+            {
+                await SendStreamingToken(token);
+            }
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Stream error");
-            await Response.WriteAsync($"data: [ERROR] 服务内部错误 (CID: {HttpContext.TraceIdentifier})\n\n");
+            await WriteErrorSafe($"[ERROR] 服务内部错误 (CID: {HttpContext.TraceIdentifier})");
+        }
+    }
+
+    private static List<LLMChatMessage> BuildToolModeMessages(
+        string query, List<(string Role, string Content)>? history)
+    {
+        var messages = new List<LLMChatMessage>();
+
+        // Build proper conversation history as message entries
+        if (history != null && history.Count > 0)
+        {
+            messages.AddRange(history.Select(h => new LLMChatMessage
+            {
+                Role = h.Role.ToLowerInvariant() switch { "user" or "human" => "user", "assistant" or "ai" => "assistant", _ => "user" },
+                Content = h.Content
+            }));
+        }
+
+        var systemPrompt = "你是智能客服助手。如需查询知识库，使用 search_knowledge_base 工具。";
+        messages.Insert(0, new() { Role = "system", Content = systemPrompt });
+        messages.Add(new() { Role = "user", Content = query });
+
+        return messages;
+    }
+
+    /// <summary>
+    /// Send a single token as SSE data line. Checks if response has started.
+    /// </summary>
+    private async Task SendStreamingToken(string token)
+    {
+        if (Response.HasStarted) return;
+        await Response.WriteAsync($"data: {token}\n\n");
+        await Response.Body.FlushAsync();
+    }
+
+    /// <summary>
+    /// Send a complete reply as SSE data lines, chunked for streaming effect.
+    /// </summary>
+    private async Task SendStreamingTokens(string reply)
+    {
+        if (string.IsNullOrEmpty(reply)) return;
+
+        // Send the reply character-by-character for a streaming feel
+        foreach (var ch in reply)
+        {
+            if (Response.HasStarted) return;
+            await Response.WriteAsync($"data: {ch}\n\n");
             await Response.Body.FlushAsync();
+        }
+    }
+
+    /// <summary>
+    /// Safely write an error message to the SSE stream.
+    /// Checks Response.HasStarted before writing to avoid protocol errors.
+    /// Wraps in try-catch to prevent exceptions after stream has started.
+    /// </summary>
+    private async Task WriteErrorSafe(string message)
+    {
+        try
+        {
+            if (!Response.HasStarted)
+            {
+                await Response.WriteAsync($"data: {message}\n\n");
+                await Response.Body.FlushAsync();
+            }
+        }
+        catch (Exception writeEx)
+        {
+            _logger.LogError(writeEx, "Failed to write SSE error message");
         }
     }
 }

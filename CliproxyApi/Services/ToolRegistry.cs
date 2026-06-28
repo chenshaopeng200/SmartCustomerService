@@ -41,10 +41,9 @@ public class ToolRegistry
         {
             return await tool.ExecuteAsync(argumentsJson);
         }
-        catch (Exception ex)
+        catch
         {
-            _logger.LogError(ex, "Tool {ToolName} execution failed", name);
-            return JsonSerializer.Serialize(new { error = $"Tool execution failed: {ex.Message}" });
+            return JsonSerializer.Serialize(new { error = $"Tool '{name}' failed" });
         }
     }
 
