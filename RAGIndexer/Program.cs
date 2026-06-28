@@ -10,6 +10,7 @@ using iText.Kernel.Pdf;
 using iText.Kernel.Pdf.Canvas.Parser;
 using iText.Kernel.Pdf.Canvas.Parser.Listener;
 using DocumentFormat.OpenXml.Packaging;
+using DocumentFormat.OpenXml.Wordprocessing;
 using HtmlAgilityPack;
 
 var config = new ConfigurationBuilder()
@@ -212,6 +213,11 @@ static bool IsSupported(string path) =>
         ".html" => true,
         ".htm" => true,
         ".csv" => true,
+        ".png" => true,
+        ".jpg" => true,
+        ".jpeg" => true,
+        ".bmp" => true,
+        ".gif" => true,
         _ => false
     };
 
@@ -232,6 +238,7 @@ static string ExtractText(string path)
             ".docx" => ExtractFromDocx(path),
             ".html" or ".htm" => ExtractFromHtml(path),
             ".txt" or ".md" or ".csv" or ".xlsx" or ".xls" => File.ReadAllText(path, Encoding.UTF8),
+            ".png" or ".jpg" or ".jpeg" or ".bmp" or ".gif" => "图片文件，OCR功能待实现",
             _ => ""
         };
     }
@@ -298,13 +305,21 @@ static string ExtractFromPdfWithPdfPig(string path)
     return sb.ToString();
 }
 
+static string ExtractImageText(string path)
+{
+    // Placeholder: image OCR support requires tesseract or cloud API
+    // Future enhancement: integrate with Azure Computer Vision or local tesseract
+    return $"[图片文件: {Path.GetFileName(path)}，OCR功能待实现]";
+}
+
 static string ExtractFromDocx(string path)
 {
+    // Fallback: just extract raw text from paragraphs
     var sb = new StringBuilder();
     using var doc = WordprocessingDocument.Open(path, false);
     var body = doc?.MainDocumentPart?.Document?.Body;
     if (body == null) return "";
-    foreach (var para in body.Elements<DocumentFormat.OpenXml.Wordprocessing.Paragraph>())
+    foreach (var para in body.Elements<Paragraph>())
         sb.AppendLine(para.InnerText);
     return sb.ToString();
 }
