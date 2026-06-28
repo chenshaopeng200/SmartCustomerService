@@ -29,6 +29,7 @@ public static class FileConverter
             ".xlsx" or ".xls" => ConvertExcel(path),
             ".txt" or ".md" or ".csv" => File.ReadAllText(path, Encoding.UTF8),
             ".html" or ".htm" => ConvertHtml(path),
+            ".png" or ".jpg" or ".jpeg" or ".bmp" or ".gif" => $"[图片文件: {Path.GetFileName(path)}，OCR功能待实现]",
             _ => throw new NotSupportedException($"Unsupported file type: {ext}")
         };
     }
