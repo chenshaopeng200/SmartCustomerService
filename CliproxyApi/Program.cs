@@ -3,9 +3,10 @@ using Prometheus;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
+builder.Services.AddHttpClient();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
-builder.Services.AddSingleton<CliproxyApi.Services.LLMService>();
+builder.Services.AddSingleton<CliproxyApi.Services.LLMService>();  // Registered after AddHttpClient()
 builder.Services.AddSingleton<CliproxyApi.Services.QdrantService>();
 builder.Services.AddSingleton<CliproxyApi.Services.QueryRewriterService>();
 builder.Services.AddSingleton<CliproxyApi.Services.HybridSearchService>();
@@ -36,4 +37,15 @@ if (app.Environment.IsDevelopment())
 app.MapControllers();
 app.MapMetrics();
 
-app.Run();
+// Ensure LLMService (which owns HttpClient instances) is disposed on shutdown
+var appLifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
+appLifetime.ApplicationStopping.Register(() =>
+{
+    var llm = app.Services.GetService<CliproxyApi.Services.LLMService>();
+    if (llm is IAsyncDisposable asyncDisposable)
+    {
+        _ = asyncDisposable.DisposeAsync();
+    }
+});
+
+await app.RunAsync();

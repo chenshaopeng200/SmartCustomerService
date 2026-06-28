@@ -3,6 +3,46 @@ using CliproxyApi.Models;
 
 namespace CliproxyApi.Services;
 
+public interface ITool
+{
+    string Name { get; }
+    string Description { get; }
+    JsonSchema Parameters { get; }
+    Task<string> ExecuteAsync(string argumentsJson);
+}
+
+/// <summary>
+/// Helper to safely deserialize JSON arguments across all tools.
+/// </summary>
+internal static class ToolArgumentParser
+{
+    public static Dictionary<string, JsonElement>? Parse(string argumentsJson)
+    {
+        if (string.IsNullOrWhiteSpace(argumentsJson))
+            return null;
+        try
+        {
+            return JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(argumentsJson);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    public static string? GetString(Dictionary<string, JsonElement>? args, string key)
+    {
+        var arg = args?.GetValueOrDefault(key);
+        return arg.HasValue && arg.Value.ValueKind == JsonValueKind.String ? arg.Value.GetString() : null;
+    }
+
+    public static int GetInt(Dictionary<string, JsonElement>? args, string key, int defaultValue)
+    {
+        var arg = args?.GetValueOrDefault(key);
+        return arg.HasValue && arg.Value.ValueKind == JsonValueKind.Number ? arg.Value.GetInt32() : defaultValue;
+    }
+}
+
 public class SearchKnowledgeBaseTool : ITool
 {
     private readonly QdrantService _qdrantService;
@@ -26,9 +66,9 @@ public class SearchKnowledgeBaseTool : ITool
 
     public async Task<string> ExecuteAsync(string argumentsJson)
     {
-        var args = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(argumentsJson);
-        var query = args?.GetValueOrDefault("query").GetString() ?? "";
-        var topK = args?.GetValueOrDefault("top_k").GetInt32() ?? 3;
+        var args = ToolArgumentParser.Parse(argumentsJson);
+        var query = ToolArgumentParser.GetString(args, "query") ?? "";
+        var topK = ToolArgumentParser.GetInt(args, "top_k", 3);
 
         var results = await _qdrantService.RetrieveRelevantChunks(query, topK);
         return JsonSerializer.Serialize(new
@@ -60,8 +100,8 @@ public class CreateSupportTicketTool : ITool
 
     public Task<string> ExecuteAsync(string argumentsJson)
     {
-        var args = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(argumentsJson);
-        var title = args?.GetValueOrDefault("title").GetString() ?? "";
+        var args = ToolArgumentParser.Parse(argumentsJson);
+        var title = ToolArgumentParser.GetString(args, "title") ?? "";
         var ticketId = $"TKT-{Guid.NewGuid():N}"[..12];
         return Task.FromResult(JsonSerializer.Serialize(new
         {
@@ -112,8 +152,8 @@ public class GetOrderStatusTool : ITool
 
     public Task<string> ExecuteAsync(string argumentsJson)
     {
-        var args = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(argumentsJson);
-        var orderId = args?.GetValueOrDefault("order_id").GetString() ?? "";
+        var args = ToolArgumentParser.Parse(argumentsJson);
+        var orderId = ToolArgumentParser.GetString(args, "order_id") ?? "";
         return Task.FromResult(JsonSerializer.Serialize(new
         {
             order_id = orderId,
@@ -139,8 +179,8 @@ public class GetProductInfoTool : ITool
 
     public Task<string> ExecuteAsync(string argumentsJson)
     {
-        var args = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(argumentsJson);
-        var productName = args?.GetValueOrDefault("product_name").GetString() ?? "";
+        var args = ToolArgumentParser.Parse(argumentsJson);
+        var productName = ToolArgumentParser.GetString(args, "product_name") ?? "";
         return Task.FromResult(JsonSerializer.Serialize(new
         {
             product_name = productName,
@@ -168,9 +208,9 @@ public class CollectFeedbackTool : ITool
 
     public Task<string> ExecuteAsync(string argumentsJson)
     {
-        var args = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(argumentsJson);
-        var rating = args?.GetValueOrDefault("rating").GetInt32() ?? 0;
-        var comment = args?.GetValueOrDefault("comment").GetString() ?? "";
+        var args = ToolArgumentParser.Parse(argumentsJson);
+        var rating = ToolArgumentParser.GetInt(args, "rating", 0);
+        var comment = ToolArgumentParser.GetString(args, "comment") ?? "";
         return Task.FromResult(JsonSerializer.Serialize(new
         {
             received = true,

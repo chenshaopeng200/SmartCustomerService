@@ -64,8 +64,8 @@ public class QueryRewriterService
         var jsonEnd = response.LastIndexOf(']');
         if (jsonStart >= 0 && jsonEnd > jsonStart)
         {
-            var json = response[jsonStart..(jsonEnd + 1)];
-            return JsonSerializer.Deserialize<List<string>>(json) ?? new List<string>();
+            var json = response[jsonStart..(jsonEnd + 1)].Trim();
+            return JsonSerializer.Deserialize<List<string>>(json)?.Where(s => !string.IsNullOrWhiteSpace(s)).ToList() ?? new List<string>();
         }
         return new List<string>();
     }

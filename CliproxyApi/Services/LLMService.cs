@@ -4,7 +4,7 @@ using CliproxyApi.Models;
 
 namespace CliproxyApi.Services;
 
-public class LLMService
+public class LLMService : IAsyncDisposable
 {
     private readonly HttpClient _httpClient;
     private readonly HttpClient _embeddingHttpClient;
@@ -17,22 +17,33 @@ public class LLMService
         DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
     };
 
-    public LLMService(IConfiguration config, ILogger<LLMService> logger)
+    public LLMService(IHttpClientFactory factory, IConfiguration config, ILogger<LLMService> logger)
     {
         _logger = logger;
-        var baseUrl = config["CliproxyApi:BaseUrl"]!;
-        var apiKey = config["CliproxyApi:ApiKey"]!;
-        _chatModel = config["CliproxyApi:ChatModel"]!;
-        _embeddingModel = config["EmbeddingApi:Model"] ?? config["CliproxyApi:EmbeddingModel"]!;
+        var baseUrl = config["CliproxyApi:BaseUrl"];
+        var apiKey = config["CliproxyApi:ApiKey"];
+        _chatModel = config["CliproxyApi:ChatModel"] ?? string.Empty;
+        _embeddingModel = config["EmbeddingApi:Model"] ?? config["CliproxyApi:EmbeddingModel"] ?? string.Empty;
 
-        _httpClient = new HttpClient { BaseAddress = new Uri(baseUrl), Timeout = TimeSpan.FromSeconds(30) };
-        _httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {apiKey}");
+        _httpClient = factory.CreateClient();
+        _httpClient.BaseAddress = string.IsNullOrEmpty(baseUrl) ? null : new Uri(baseUrl);
+        _httpClient.Timeout = TimeSpan.FromSeconds(30);
+        if (!string.IsNullOrEmpty(apiKey))
+            _httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {apiKey}");
 
-        var embeddingBaseUrl = config["EmbeddingApi:BaseUrl"]!;
-        var embeddingApiKey = config["EmbeddingApi:ApiKey"]!;
-        _embeddingHttpClient = new HttpClient { BaseAddress = new Uri(embeddingBaseUrl), Timeout = TimeSpan.FromSeconds(30) };
-        _embeddingHttpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {embeddingApiKey}");
+        var embeddingBaseUrl = config["EmbeddingApi:BaseUrl"];
+        var embeddingApiKey = config["EmbeddingApi:ApiKey"];
+
+        _embeddingHttpClient = factory.CreateClient();
+        _embeddingHttpClient.BaseAddress = string.IsNullOrEmpty(embeddingBaseUrl) ? null : new Uri(embeddingBaseUrl);
+        _embeddingHttpClient.Timeout = TimeSpan.FromSeconds(30);
+        if (!string.IsNullOrEmpty(embeddingApiKey))
+            _embeddingHttpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {embeddingApiKey}");
     }
+
+    // NOTE: HttpClient instances from IHttpClientFactory are pooled/shared — do not dispose them.
+    // The factory manages their lifecycle.
+    public ValueTask DisposeAsync() => default;
 
     public async Task<float[]> GetEmbedding(string text, string inputType = "passage")
     {
@@ -177,6 +188,11 @@ public class LLMService
 
     private async Task<string?> Chat(List<LLMChatMessage> messages)
     {
+        if (string.IsNullOrEmpty(_chatModel))
+        {
+            _logger.LogError("Chat model is not configured");
+            return null;
+        }
         PrometheusMetrics.LlmCallsTotal.WithLabels("chat").Inc();
         var request = new LLMChatRequest { Model = _chatModel, Messages = messages };
         var content = new StringContent(JsonSerializer.Serialize(request, _jsonOptions), Encoding.UTF8, "application/json");

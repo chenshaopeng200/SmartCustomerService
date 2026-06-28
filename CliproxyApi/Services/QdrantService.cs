@@ -54,7 +54,7 @@ public class QdrantService
 
             return searchResult.Select(r => new QdrantSearchResult
             {
-                Text = r.Payload["text"].StringValue,
+                Text = r.Payload.TryGetValue("text", out var txt) ? txt.StringValue : "",
                 Source = r.Payload.TryGetValue("source", out var src) ? src.StringValue : "unknown",
                 Score = r.Score
             }).ToList();

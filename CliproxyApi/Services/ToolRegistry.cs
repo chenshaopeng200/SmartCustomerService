@@ -44,7 +44,7 @@ public class ToolRegistry
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Tool '{ToolName}' execution failed", name);
-            return JsonSerializer.Serialize(new { error = $"Tool '{name}' failed" });
+            return JsonSerializer.Serialize(new { error = $"Tool '{name}' failed: {ex.Message}" });
         }
     }
 

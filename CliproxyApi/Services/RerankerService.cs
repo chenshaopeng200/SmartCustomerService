@@ -25,7 +25,9 @@ public class RerankerService
             var docList = new StringBuilder();
             for (int i = 0; i < candidates.Count; i++)
             {
-                docList.AppendLine($"[{i}] {candidates[i].Text[..Math.Min(300, candidates[i].Text.Length)]}");
+                var text = candidates[i].Text ?? "";
+                var truncated = text.Length > 300 ? text[..300] : text;
+                docList.AppendLine($"[{i}] {truncated}");
             }
 
             var prompt = $@"请对以下文档按与问题的相关性从高到低排序，只输出排序后的文档编号JSON数组。

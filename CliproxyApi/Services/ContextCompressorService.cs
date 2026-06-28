@@ -16,15 +16,15 @@ public class ContextCompressorService
 
     public async Task<string> CompressAsync(string query, List<QdrantSearchResult> docs)
     {
-        if (docs.Count == 0)
+        if (docs == null || docs.Count == 0)
             return string.Empty;
 
         try
         {
             var combinedDocs = new StringBuilder();
-            for (int i = 0; i < docs.Count; i++)
+            foreach (var doc in docs)
             {
-                combinedDocs.AppendLine($"[{i}] {docs[i].Text}");
+                combinedDocs.AppendLine($"[{combinedDocs.Length}] {(doc.Text ?? "")}");
             }
 
             var prompt = "请从以下文档中，只提取与用户问题直接相关的句子。保留原始编号标记。\n" +

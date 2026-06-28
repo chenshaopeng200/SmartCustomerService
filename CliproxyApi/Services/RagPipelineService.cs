@@ -132,6 +132,11 @@ public class RagPipelineService
     private async Task<(string Context, List<QdrantSearchResult> Docs, List<string> Sources)?> BuildContextAsync(
         string query, List<(string Role, string Content)>? history, RagFeatureOverrides? featureOverrides = null)
     {
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            _logger.LogWarning("BuildContextAsync called with empty query");
+            return null;
+        }
         var fo = featureOverrides;
         var enableRewriting = fo?.EnableQueryRewriting ?? _config.EnableQueryRewriting;
         var enableHyDE = fo?.EnableHyDE ?? _config.EnableHyDE;

@@ -168,17 +168,29 @@ public class ChatProxyController : ControllerBase
 
     /// <summary>
     /// Send a complete reply as SSE data lines, chunked for streaming effect.
+    /// Chunks are sized to ~100 chars or at word boundaries for reasonable latency.
     /// </summary>
     private async Task SendStreamingTokens(string reply)
     {
         if (string.IsNullOrEmpty(reply)) return;
 
-        // Send the reply character-by-character for a streaming feel
-        foreach (var ch in reply)
+        const int chunkSize = 100;
+        int pos = 0;
+        while (pos < reply.Length)
         {
             if (Response.HasStarted) return;
-            await Response.WriteAsync($"data: {ch}\n\n");
+            var end = Math.Min(pos + chunkSize, reply.Length);
+            // Try to break at word boundary
+            if (end < reply.Length)
+            {
+                var searchBack = reply.Substring(end - 20, 20);
+                var lastSpace = searchBack.LastIndexOf(' ');
+                if (lastSpace >= 0)
+                    end = pos + lastSpace;
+            }
+            await Response.WriteAsync($"data: {reply.Substring(pos, end - pos)}\n\n");
             await Response.Body.FlushAsync();
+            pos = end;
         }
     }
 
