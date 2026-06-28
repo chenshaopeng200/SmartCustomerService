@@ -4,6 +4,7 @@ using iText.Kernel.Pdf;
 using iText.Kernel.Pdf.Canvas.Parser;
 using iText.Kernel.Pdf.Canvas.Parser.Listener;
 using DocumentFormat.OpenXml.Packaging;
+using DocumentFormat.OpenXml.Wordprocessing;
 using HtmlAgilityPack;
 using ReverseMarkdown;
 using MiniExcelLibs;
@@ -74,7 +75,7 @@ public static class FileConverter
         var body = doc?.MainDocumentPart?.Document?.Body;
         if (body == null) return "";
 
-        foreach (var para in body.Elements<DocumentFormat.OpenXml.Wordprocessing.Paragraph>())
+        foreach (var para in body.Elements<Paragraph>())
         {
             var text = para.InnerText.Trim();
             if (string.IsNullOrWhiteSpace(text)) continue;
